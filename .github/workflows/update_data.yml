@@ -1,0 +1,36 @@
+name: Update game data
+
+on:
+  schedule:
+    # Runs daily at 06:00 UTC (after Atlas Academy typically publishes JP updates)
+    - cron: '0 6 * * *'
+  workflow_dispatch: # allow manual trigger from GitHub UI
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run update script
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python scripts/GetUpdatesAndUpsert.py
+
+      - name: Upload log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: update-log
+          path: script.log
+          retention-days: 7
