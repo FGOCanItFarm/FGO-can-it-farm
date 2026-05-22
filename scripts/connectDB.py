@@ -1,24 +1,36 @@
 import os
-from pymongo import MongoClient
-from dotenv import load_dotenv
 import sys
+from contextlib import contextmanager
 
-# Connect to MongoDB
-# Load environment variables from .env file
+import psycopg2
+import psycopg2.extras
+from psycopg2.pool import ThreadedConnectionPool
+from dotenv import load_dotenv
+
 load_dotenv()
-# Get the username and password from environment variables
-# Set the encoding to UTF-8
 
-# MongoDB connection
-mongo_uri = os.getenv('MONGO_URI_READ')
-if not mongo_uri:
-    raise ValueError("No MONGO_URI_READ environment variable set")
+_DATABASE_URL = os.getenv('DATABASE_URL')
+if not _DATABASE_URL:
+    raise ValueError("No DATABASE_URL environment variable set")
 
-client = MongoClient(mongo_uri)
-db = client['FGOCanItFarmDatabase']
-servants_collection = db['servants']
-quests_collection = db['quests']
-mysticcode_collection = db['mysticcodes']
+# Min 1, max 10 connections — sufficient for the update script and
+# FastAPI's background thread running concurrently.
+_pool = ThreadedConnectionPool(1, 10, _DATABASE_URL)
 
-# Set the encoding to UTF-8
+
+@contextmanager
+def get_cursor():
+    """Yield a RealDictCursor, commit on success, rollback on error."""
+    conn = _pool.getconn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            yield cur
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        _pool.putconn(conn)
+
+
 sys.stdout.reconfigure(encoding='utf-8')
