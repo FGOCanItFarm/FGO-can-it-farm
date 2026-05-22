@@ -14,11 +14,18 @@ logging.basicConfig(filename='./outputs/output.log', level=logging.INFO,
 class Servant:
     special_servants = [312, 394, 391, 413, 385, 350, 306, 305]
 
-    def __init__(self, collectionNo, np=1, initialCharge=0, attack=0, atkUp=0, artsUp=0, quickUp=0, busterUp=0, npUp=0, damageUp=0, busterDamageUp=0, quickDamageUp=0, artsDamageUp=0, append_5=False):
+    def __init__(self, collectionNo, np=1, initialCharge=0, attack=0, atkUp=0, artsUp=0, quickUp=0, busterUp=0, npUp=0, damageUp=0, busterDamageUp=0, quickDamageUp=0, artsDamageUp=0, append_5=False, version_spec=None):
         self.id = collectionNo
-        self.data = select_character(collectionNo)
-        if self.data is None:
+        raw_data = select_character(collectionNo)
+        if raw_data is None:
             raise ValueError(f"Servant data for collectionNo {collectionNo} not found.")
+
+        if version_spec is not None:
+            from parsers.servant_parser import parse_servant_data
+            self.data = parse_servant_data(raw_data, version_spec)
+        else:
+            self.data = raw_data
+
         self.name = self.data.get('name')
         self.class_name = self.data.get('className')
         self.class_id = self.data.get('classId')
