@@ -19,19 +19,15 @@ class Buffs:
         add_magic_bullets = False
         logging.info(f"PROCESSING END TURN SKILLS")
         for i, buff in enumerate(self.buffs):
-            # logging.info(f"step 2.{i}")
             if buff['buff'] == 'NP Gain Each Turn':
-                # logging.info(f"step 3.{i} checking for NP GAIN PER TURN")
                 self.servant.set_npgauge(buff['value'])
             if buff['buff'] == 'Delayed Effect (Death)':
-                # logging.info(f"step 4.{i} checking for delayed effect of instant death")
                 self.servant.kill = True
             if self.servant.name == 'Super Aoko':
-                # logging.info(f"step 5.{i} checking if we are SUPER AOKO, IF true add 2 magic bullets")
                 add_magic_bullets = True
 
         if add_magic_bullets == True:
-            self.add_buff(magic_bullet_buff) # adds 4 per turn for some reason when both are added
+            self.add_buff(magic_bullet_buff)
             self.add_buff(magic_bullet_buff)
 
     def process_enemy_buffs(self):
@@ -41,8 +37,6 @@ class Buffs:
         self.enemy.a_resdown = 0
         self.enemy.q_resdown = 0
         self.enemy.roman = self.enemy.traits.count(2004)
-        # Process buffs and update modifiers
-        # print(f"{self.name} has the following effects applied: {self.buffs}")
         for buff in self.buffs:
             if buff['buff'] == 'DEF Down':
                 self.enemy.defense -= buff['value'] / 1000
@@ -54,8 +48,6 @@ class Buffs:
                 self.enemy.q_resdown -= buff['value'] / 1000
             elif buff['buff'] == 'Apply Trait (Rome)':
                 self.enemy.traits.append(2004)
-            # Add more buff processing as needed
-        # print(buff)
 
     def process_servant_buffs(self):
         # Reset modifiers
@@ -71,10 +63,8 @@ class Buffs:
         self.servant.arts_card_damage_up = self.servant.user_arts_damage_up
         self.servant.quick_card_damage_up = self.servant.user_quick_damage_up
 
-        # Store a flag for Boost NP Strength Up
         boost_np_strength_up_active = False
 
-        # Initial pass to calculate np_damage_mod
         for buff in self.buffs:
             required_field = buff.get('script', {}).get('INDIVIDUALITIE', {}).get('id')
             if required_field is None:
@@ -85,11 +75,9 @@ class Buffs:
                 elif buff['buff'] == 'Boost NP Strength Up':
                     boost_np_strength_up_active = True
 
-        # Apply the Boost NP Strength Up multiplier
         if boost_np_strength_up_active:
             self.servant.np_damage_mod *= 2
 
-        # Second pass for other buffs
         for buff in self.buffs:
             required_field = buff.get('script', {}).get('INDIVIDUALITIE', {}).get('id')
             if required_field is None:
@@ -112,7 +100,7 @@ class Buffs:
                         if tval not in self.servant.power_mod:
                             self.servant.power_mod[tval] = 0
                         self.servant.power_mod[tval] += buff.get("value", 0)
-                elif 'Triggers Each Turn (Increase NP)' in buff['buff'] or 'Triggers Each Turn (NP Absorb)' in buff['buff']: # TODO assumes all Triggers Each Turn buffs are for NP gain
+                elif 'Triggers Each Turn (Increase NP)' in buff['buff'] or 'Triggers Each Turn (NP Absorb)' in buff['buff']:
                     self.servant.np_gauge += buff['value']
                 elif buff['buff'] == 'NP Gain Up':
                     self.servant.np_gain_mod += buff['value'] / 1000
@@ -137,11 +125,16 @@ class Buffs:
     def parse_passive_functions(self, functions_data):
         functions = []
         for func in functions_data:
+            svals_raw = func.get('svals')
+            if isinstance(svals_raw, list) and svals_raw and isinstance(svals_raw[0], dict):
+                sval = svals_raw[0]
+            else:
+                sval = {}
             parsed_function = {
                 'funcType': func.get('funcType'),
                 'funcTargetType': func.get('funcTargetType'),
                 'functvals': func.get('functvals', []),
-                'svals': func.get('svals', [{}])[0],
+                'svals': sval,
                 'buffs': func.get('buffs', [])
             }
             functions.append(parsed_function)
@@ -181,4 +174,3 @@ class Buffs:
 
     def __repr__(self):
         return self.grouped_str()
-

@@ -4,35 +4,54 @@ class Skills:
         self.cooldowns = {1: 0, 2: 0, 3: 0}
         self.max_cooldowns = self.initialize_max_cooldowns()
         self.cooldown_reduction_applied = {1: False, 2: False, 3: False}
-        self.mystic_code = mystic_code  # Initialize Mystic Code
+        self.mystic_code = mystic_code
         self.melusine_skill = False
         self.append_5 = append_5
 
+    @staticmethod
+    def _safe_sval(svals_raw, default=None):
+        """Return the max-level (index 9) sval dict from a raw svals list.
+        Falls back to last entry when fewer than 10 entries exist.
+        Returns default ({}) for non-list or empty input."""
+        if default is None:
+            default = {}
+        if not isinstance(svals_raw, list) or not svals_raw:
+            return default
+        entry = svals_raw[9] if len(svals_raw) > 9 else svals_raw[-1]
+        return entry if isinstance(entry, dict) else default
+
     def parse_skills(self, skills_data):
-        skills = {1:[], 2:[], 3:[]}
+        skills = {1: [], 2: [], 3: []}
         for skill in skills_data:
+            cooldown_list = skill.get('coolDown', [])
+            if isinstance(cooldown_list, list) and cooldown_list:
+                cooldown = cooldown_list[9] if len(cooldown_list) > 9 else cooldown_list[-1]
+            else:
+                cooldown = 0
             parsed_skill = {
                 'id': skill.get('id'),
                 'name': skill.get('name'),
-                'cooldown': skill.get('coolDown')[9] if len(skill.get('coolDown', [])) > 9 else 0,
+                'cooldown': cooldown,
                 'functions': []
             }
             for function in skill.get('functions', []):
+                sval = self._safe_sval(function.get('svals'))
                 parsed_function = {
                     'funcType': function.get('funcType'),
                     'funcTargetType': function.get('funcTargetType'),
                     'functvals': function.get('functvals'),
                     'fieldReq': function.get('funcquestTvals', []),
                     'condTarget': function.get('functvals', []),
-                    'svals': function.get('svals')[9] if len(function.get('svals', [])) > 9 else {},
+                    'svals': sval,
                     'buffs': []
                 }
                 for buff in function.get('buffs', []):
+                    buff_sval = self._safe_sval(buff.get('svals'))
                     parsed_buff = {
                         'name': buff.get('name'),
                         'tvals': buff.get('tvals', []),
-                        'svals': buff.get('svals')[9] if len(buff.get('svals', [])) > 9 else None,
-                        'value': buff.get('svals')[9]['Value'] if len(buff.get('svals', [])) > 9 else 0
+                        'svals': buff_sval if buff_sval else None,
+                        'value': buff_sval.get('Value', 0) if buff_sval else 0
                     }
                     parsed_function['buffs'].append(parsed_buff)
                 parsed_skill['functions'].append(parsed_function)
@@ -47,7 +66,6 @@ class Skills:
 
     def get_skill_by_num(self, num):
         if 1 <= num < len(self.skills) + 1:
-
             if self.melusine_skill == False and self.skills[num][0]['id'] == 888550:
                 self.melusine_skill = True
                 return self.skills[num][0]
