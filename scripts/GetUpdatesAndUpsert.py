@@ -88,6 +88,22 @@ def _extract_attack_type(data):
     return 'support'
 
 
+def _extract_face_url(data):
+    """Return the highest-ascension face image URL from extraAssets."""
+    ascension = (
+        data.get('extraAssets', {})
+            .get('faces', {})
+            .get('ascension', {})
+    )
+    if not ascension:
+        return None
+    for key in ('4', '3', '2', '1'):
+        if key in ascension:
+            return ascension[key]
+    vals = list(ascension.values())
+    return vals[0] if vals else None
+
+
 def run_guardrail_pipeline(data):
     """
     5-step pre-parse of raw Atlas Academy servant JSON.
@@ -106,6 +122,7 @@ def run_guardrail_pipeline(data):
         'is_enemy_only':    data.get('isEnemy', False),
         'form_transition':  None,
         'parser_flags':     {},
+        'face_url':         _extract_face_url(data),
     }
 
     # Step 1 — transformServant in skill functions (Jekyll-style one-way transform)
@@ -117,7 +134,6 @@ def run_guardrail_pipeline(data):
         result['form_transition'] = 'irreversible'
         result['parser_flags']['has_transform_servant'] = True
     elif len(transform_skills) > 1:
-        # Multiple toggle skills → servant can revert (Ptolemy-style)
         result['form_transition'] = 'reversible'
         result['parser_flags']['has_transform_servant'] = True
 
@@ -156,12 +172,12 @@ _SERVANT_UPSERT_SQL = """
         collection_no, name, class_name, rarity,
         np_card, np_card_variable, np_card_options, attack_type,
         is_enemy_only, form_transition, parser_flags,
-        aa_data_hash, data, updated_at
+        face_url, aa_data_hash, data, updated_at
     ) VALUES (
         %(collection_no)s, %(name)s, %(class_name)s, %(rarity)s,
         %(np_card)s, %(np_card_variable)s, %(np_card_options)s, %(attack_type)s,
         %(is_enemy_only)s, %(form_transition)s, %(parser_flags)s,
-        %(aa_data_hash)s, %(data)s, now()
+        %(face_url)s, %(aa_data_hash)s, %(data)s, now()
     )
     ON CONFLICT (collection_no) DO UPDATE SET
         name             = EXCLUDED.name,
@@ -174,6 +190,7 @@ _SERVANT_UPSERT_SQL = """
         is_enemy_only    = EXCLUDED.is_enemy_only,
         form_transition  = EXCLUDED.form_transition,
         parser_flags     = EXCLUDED.parser_flags,
+        face_url         = EXCLUDED.face_url,
         aa_data_hash     = EXCLUDED.aa_data_hash,
         data             = EXCLUDED.data,
         updated_at       = now()
@@ -194,6 +211,7 @@ def _upsert_servant(data, aa_hash):
         'is_enemy_only':    parsed['is_enemy_only'],
         'form_transition':  parsed['form_transition'],
         'parser_flags':     Json(parsed['parser_flags']),
+        'face_url':         parsed['face_url'],
         'aa_data_hash':     aa_hash,
         'data':             Json(data),
     }
@@ -258,11 +276,11 @@ def retrieve_servants(progress_callback=None):
 _QUEST_UPSERT_SQL = """
     INSERT INTO public.quests (
         id, name, war_id, war_name, recommend_lv, consume, after_clear,
-        data, updated_at
+        opened_at, data, updated_at
     ) VALUES (
         %(id)s, %(name)s, %(war_id)s, %(war_name)s,
         %(recommend_lv)s, %(consume)s, %(after_clear)s,
-        %(data)s, now()
+        %(opened_at)s, %(data)s, now()
     )
     ON CONFLICT (id) DO UPDATE SET
         name         = EXCLUDED.name,
@@ -271,6 +289,7 @@ _QUEST_UPSERT_SQL = """
         recommend_lv = EXCLUDED.recommend_lv,
         consume      = EXCLUDED.consume,
         after_clear  = EXCLUDED.after_clear,
+        opened_at    = EXCLUDED.opened_at,
         data         = EXCLUDED.data,
         updated_at   = now()
 """
@@ -290,11 +309,16 @@ def _upsert_quest(data, war_id, war_name):
         'recommend_lv': data.get('recommendLv', ''),
         'consume':      data.get('consume', 0),
         'after_clear':  data.get('afterClear', ''),
+        'opened_at':    data.get('openedAt'),
         'data':         Json(data),
     }
     with get_cursor() as cur:
         cur.execute(_QUEST_UPSERT_SQL, params)
     logging.info('Upserted quest %s', quest_id)
+
+
+KEEP_WAR_TYPES  = {'eventQuest', 'permanent'}
+RECOMMEND_LVS   = {'90', '90+', '90++', '90★', '90★★'}
 
 
 def retrieve_quests():
@@ -392,10 +416,10 @@ def retrieve_mystic_codes():
 
         with get_cursor() as cur:
             cur.execute(_MC_UPSERT_SQL, {
-                'id':          mc_id,
-                'name':        data.get('name', ''),
+                'id':           mc_id,
+                'name':         data.get('name', ''),
                 'aa_data_hash': aa_hash,
-                'data':        Json(data),
+                'data':         Json(data),
             })
         mc_updated += 1
         logging.info('Upserted mystic code %s', mc_id)
